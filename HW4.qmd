@@ -1,0 +1,158 @@
+---
+title: "HW4"
+author: "Jiaqi"
+format:
+  html:
+    embed-resources: true
+    code-overflow: wrap
+editor: visual
+---
+
+GitHub repository:
+
+## Problem 1 - Tidyverse
+
+a.  Generate a table reporting the mean and median departure delay per airport. Generate a second table reporting the mean and median arrival delay per airport. Exclude any destination with under 10 flights. Do this exclusion through code, not manually.
+
+```{r}
+library(nycflights13)
+library(tidyverse)
+data("flights")
+data("airports")
+
+# the mean and median departure delay per airport
+departure_delays <- flights %>%
+  # Group data by departure airport: origin
+  group_by(origin) %>%
+  summarise(
+    mean_delay = mean(dep_delay, na.rm = TRUE),
+    median_delay = median(dep_delay, na.rm = TRUE),
+    # Ensures the resulting tibble is ungrouped
+    .groups = "drop"
+  ) %>%
+  # Order by mean delay in desc order
+  arrange(-mean_delay) %>%
+  # Join with the airports to get the airports' names
+  left_join(airports, by = c("origin" = "faa")) %>%
+  # Select the columns to display
+  select(name, mean_delay, median_delay)
+
+print(departure_delays)
+
+# the mean and median arrival delay per airport
+arrival_delays <- flights %>%
+  # Group data by destination airport
+  group_by(dest) %>%
+  # Summarise the mean and median arrival delays
+  summarise(
+    mean_delay = mean(arr_delay, na.rm = TRUE),
+    median_delay = median(arr_delay, na.rm = TRUE),
+    flight_count = n(),
+    # Ensures the resulting tibble is ungrouped
+    .groups = "drop"
+  ) %>%
+  # Filter out destinations with < 10 flights
+  filter(flight_count >= 10) %>%
+  # Order by mean delay in desc order
+  arrange(-mean_delay) %>%
+  # Get the airports' names
+  left_join(airports, by = c("dest" = "faa")) %>%
+  # Select the columns to display
+  select(name, mean_delay, median_delay)
+
+print(arrival_delays)
+```
+
+b.  How many flights did the aircraft model with the fastest average speed take? Produce a tibble with 1 row, and entires for the model, average speed (in MPH) and number of flights.
+
+```{r}
+data("planes")
+
+# Calculate average speed, group by aircraft model
+fastest_aircraft <- flights %>%
+  # Filter out distance or air_time is NA
+  filter(!is.na(distance), !is.na(air_time)) %>%
+  
+  # Calculate average speed
+  mutate(speed_mph = distance / (air_time / 60)) %>%
+  
+  # Group by tailnum (representing aircraft model)
+  group_by(tailnum) %>%
+  
+  # Summarize average speed and number of flights
+  summarise(
+    avg_speed = mean(speed_mph, na.rm = TRUE),
+    num_flights = n()
+  ) %>%
+  
+  # Arrange by average speed in desc order and take the first row
+  arrange(desc(avg_speed)) %>%
+  slice(1)
+
+fastest_aircraft
+
+```
+
+## Problem 2 - get_temp()
+
+```{r}
+library(tidyverse)
+
+get_temp <- function(month, year, data, celsius = FALSE, average_fn = mean) {
+  # Sanitize input
+  if (!is.numeric(year) || year < 0) {
+    stop("Please provide a valid numeric year.")
+  }
+  
+  if (is.character(month)) {
+    month_names <- c("January", "February", "March", "April", "May", "June",
+                     "July", "August", "September", "October", "November", "December", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                     "Jul", "Aug", "Sept", "Oct", "Nov", "Dec")
+    if (!month %in% month_names) {
+      stop("Please provide a valid month name.")
+    }
+    month <- which(month_names == month)
+  } else if (!is.numeric(month) || month < 1 || month > 12) {
+    stop("Please provide a valid numeric month between 1 and 12.")
+  }
+  
+  # Compute the average temperature
+  avg_temp <- data %>%
+    filter(year == year, month == month) %>%
+    summarise(avg = average_fn(temp, na.rm = TRUE)) %>%
+    pull(avg)
+  
+  # Convert to Celsius if needed
+  if (celsius) {
+    avg_temp <- (avg_temp - 32) * 5/9
+  }
+  
+  return(avg_temp)
+}
+
+# Load the Chicago NNMAPS data
+chicago_data <- read.csv("/Users/jiaqizhu/Downloads/506/506_HW3/chicago-nmmaps.csv", header = TRUE)
+
+avg_jan_2000 <- get_temp("January", 2000, chicago_data)
+avg_feb_1995_celsius <- get_temp(2, 1995, chicago_data, celsius = TRUE)
+test1 <- get_temp("Apr", 1999, data = nnmaps)
+test2 <- get_temp("Apr", 1999, data = nnmaps, celsius = TRUE)
+test3 <- get_temp(10, 1998, data = nnmaps, average_fn = median)
+test4 <- get_temp(13, 1998, data = nnmaps)
+test5 <- get_temp(2, 2005, data = nnmaps)
+test6 <- get_temp("November", 1999, data =nnmaps, celsius = TRUE,
+         average_fn = function(x) {
+           x %>% sort -> x
+           x[2:(length(x) - 1)] %>% mean %>% return
+         })
+
+print(avg_jan_2000)
+print(avg_feb_1995_celsius)
+print(test1)
+print(test2)
+
+```
+```{r}
+month <- month.name[5]
+month
+```
