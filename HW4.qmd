@@ -8,7 +8,7 @@ format:
 editor: visual
 ---
 
-GitHub repository:
+GitHub repository: https://github.com/Julie0707/506_HW4
 
 ## Problem 1 - Tidyverse
 
@@ -60,7 +60,7 @@ arrival_delays <- flights %>%
   # Select the columns to display
   select(name, mean_delay, median_delay)
 
-print(arrival_delays)
+print(arrival_delays, n = nrow(arrival_delays))
 ```
 
 b.  How many flights did the aircraft model with the fastest average speed take? Produce a tibble with 1 row, and entires for the model, average speed (in MPH) and number of flights.
@@ -97,44 +97,65 @@ fastest_aircraft
 
 ```{r}
 library(tidyverse)
-
 get_temp <- function(month, year, data, celsius = FALSE, average_fn = mean) {
-  # Sanitize input
-  if (!is.numeric(year) || year < 0) {
-    stop("Please provide a valid numeric year.")
-  }
-  
-  if (is.character(month)) {
-    month_names <- c("January", "February", "March", "April", "May", "June",
-                     "July", "August", "September", "October", "November", "December", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                     "Jul", "Aug", "Sept", "Oct", "Nov", "Dec")
-    if (!month %in% month_names) {
-      stop("Please provide a valid month name.")
+  result <- tryCatch({
+    # Sanitize input
+    if (is.numeric(month)) {
+      if (month < 1 || month > 12) {
+        stop("Month must be between 1 and 12")
+      }
+      month_num <- month
+    } else if (is.character(month)) {
+      month <- match(month, c(month.abb, month.name), nomatch = 0)
+      
+      if (month > 12){
+        month <-  month - 12
+      }
+      if (month == 0) {
+        stop("Invalid month name")
+      }
+    } else {
+      stop("Month must be a number or a string")
     }
-    month <- which(month_names == month)
-  } else if (!is.numeric(month) || month < 1 || month > 12) {
-    stop("Please provide a valid numeric month between 1 and 12.")
-  }
+    month_num <- as.integer(month)
+    
+    year_num <- year
+    if (!is.numeric(year_num) || (year_num > max(data$year))) {
+      stop("Year must be an integer and be within range")
+    }
+    
+    if (!is.data.frame(data)) {
+      stop("Data must be a data frame")
+    }
+    
+    if (!is.logical(celsius)) {
+      stop("Celsius must be a logical value")
+    }
+    
+    if (!is.function(average_fn)) {
+      stop("average_fn must be a function")
+    }
+    # Convert temperature to Celsius
+    if (celsius) {
+      data <- data %>%
+        mutate(temp = (temp - 32) * 5 / 9)
+    }
+    # Filter data by month and year, Calculate average temperature
+    data_temp <- data %>%
+      filter(month_numeric == month_num, year == year_num) %>%
+      summarise(avg_temp = average_fn(temp))
+      #pull(avg_temp)
+      data_temp$avg_temp
+  }, error = function(e) {
+    message("Error: ", e$message)
+    NA_real_
+  })
   
-  # Compute the average temperature
-  avg_temp <- data %>%
-    filter(year == year, month == month) %>%
-    summarise(avg = average_fn(temp, na.rm = TRUE)) %>%
-    pull(avg)
-  
-  # Convert to Celsius if needed
-  if (celsius) {
-    avg_temp <- (avg_temp - 32) * 5/9
-  }
-  
-  return(avg_temp)
+  return(result)
 }
 
 # Load the Chicago NNMAPS data
-chicago_data <- read.csv("/Users/jiaqizhu/Downloads/506/506_HW3/chicago-nmmaps.csv", header = TRUE)
-
-avg_jan_2000 <- get_temp("January", 2000, chicago_data)
-avg_feb_1995_celsius <- get_temp(2, 1995, chicago_data, celsius = TRUE)
+nnmaps <- read.csv("/Users/jiaqizhu/Downloads/506/506_HW4/chicago-nmmaps.csv", header = TRUE)
 test1 <- get_temp("Apr", 1999, data = nnmaps)
 test2 <- get_temp("Apr", 1999, data = nnmaps, celsius = TRUE)
 test3 <- get_temp(10, 1998, data = nnmaps, average_fn = median)
@@ -145,14 +166,268 @@ test6 <- get_temp("November", 1999, data =nnmaps, celsius = TRUE,
            x %>% sort -> x
            x[2:(length(x) - 1)] %>% mean %>% return
          })
-
-print(avg_jan_2000)
-print(avg_feb_1995_celsius)
 print(test1)
 print(test2)
+print(test3)
+print(test4)
+print(test5)
+print(test6)
+```
+
+## Problem 3 - SAS
+
+``` sas
+proc import datafile="/home/u63642979/hw4p3/recs2020_public_v5.csv" out=recs2020 dbms=csv replace;
+  getnames=yes;
+run;
+```
+
+[The SAS results for Problem 3 in html](/Users/jiaqizhu/Downloads/506/506_HW4/p3results.html)
+
+a.  What state has the highest percentage of records? What percentage of all records correspond to Michigan?
+
+``` sas
+proc freq data=recs2020 order=freq;
+  tables state_name;
+  weight nweight;
+run;
+```
+
+California has the highest percentage of records; Michigan is 3.17%. ![](hw4_1.png) ![](hw4_2.png)
+
+b.  Generate a histogram of the total electricity cost in dollars, amongst those with a strictly positive cost.
+
+``` sas
+proc sgplot data=recs2020;
+  where dollarel > 0;
+  histogram dollarel;
+run;
+```
+
+![](hw4_3.png)
+
+c.  Generate a histogram of the log of the total electricity cost.
+
+``` sas
+data recs2020_log;
+  set recs2020;
+  where dollarel > 0 ;
+  logdollarel = log(dollarel);
+run;
+
+proc sgplot data=recs2020_log;
+  histogram logdollarel;
+run;
+```
+
+![](hw4_4.png)
+
+d.  Fit a linear regression model predicting the log of the total electricity cost based upon the number of rooms in the house and whether or not the house has a garage.
+
+``` sas
+proc reg data= recs2020_log;
+    where prkgplc1 >= 0 ;
+    weight nweight;
+    model logdollarel = totrooms prkgplc1;
+    output out=predicted_values pred=pred;
+run;
+```
+
+![](hw4_5.png)
+
+e.  Use that model to generate predicted values and create a scatterplot of predicted total electricity cost vs actual total electricity cost (not on the log scale).
+
+``` sas
+data predicted_values;
+   set predicted_values;
+   predicted_cost = exp(pred);
+run;
+    
+proc sgplot data=predicted_values;
+  scatter x=dollarel y=predicted_cost;
+run;
+```
+
+![](hw4_6.png)
+
+## Problem 4 - Multiple tools
+
+a.  Take a look at the Codebook. For very minor extra credit, how was the Codebook generated?
+
+It is generated with Stata.
+
+b.  Import the data into SAS and use proc sql to select only the variables you'll need for your analysis
+
+``` sas
+proc import datafile="/home/u63642979/hw4p3/public2022.csv" out=public2022 dbms=csv replace;
+  getnames=yes;
+run;
+
+/*b*/
+proc sql; 
+  create table subset_data as 
+  select public2022.CaseID, public2022.weight_pop, public2022.b3, public2022.nd2, public2022.b7_a, public2022.gh1, public2022.educ_4cat, public2022.ppethm 
+  from public2022;
+quit;
+```
+
+c.  Get the data out of SAS and into Stata
+
+``` sas
+proc export data=subset_data outfile="/home/u63642979/hw4p3/subdataset.csv" dbms=csv replace;
+run;
+```
+
+d.  Demonstrate that you've successfully extracted the appropriate data by showing the number of observations and variables.
+
+``` stata
+. 
+. cd "/Users/jiaqizhu/Downloads/506"
+/Users/jiaqizhu/Downloads/506
+
+. 
+end of do-file
+
+. do "/var/folders/l1/y65z_mxj42s8n3793_nb4fv00000gn/T//SD42413.000000"
+
+. log using hw4_p4.log, replace
+(note: file /Users/jiaqizhu/Downloads/506/hw4_p4.log not found)
+-------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/jiaqizhu/Downloads/506/hw4_p4.log
+  log type:  text
+ opened on:  23 Oct 2023, 02:15:08
+
+
+. import delimited "subdataset.csv"
+(8 vars, 11,667 obs)
+
+. 
+. describe
+
+Contains data
+  obs:        11,667                          
+ vars:             8                          
+ size:     1,995,057                          
+-------------------------------------------------------------------------------------------------------
+              storage   display    value
+variable name   type    format     label      variable label
+-------------------------------------------------------------------------------------------------------
+caseid          int     %8.0g                 CaseID
+weight_pop      float   %9.0g                 
+b3              str19   %19s                  B3
+nd2             str15   %15s                  ND2
+b7_a            str9    %9s                   B7_a
+gh1             str57   %57s                  GH1
+educ_4cat       str43   %43s                  
+ppethm          str22   %22s                  
+-------------------------------------------------------------------------------------------------------
+Sorted by: 
+     Note: Dataset has changed since last saved.
+```
+
+e.  The response variable is a Likert scale; convert it to a binary of worse off versus same/better.
+
+``` stata
+
+. gen sameorbetter = 0
+
+. replace sameorbetter = 1 if b3 == "Much better off" | b3 == "About the same" | b3 == "Somewhat better
+>  off"
+(7,371 real changes made)
+```
+
+f.  Use the following code to tell Stata that the data is from a complex sample, Carry out a logisitic regression model accounting for the complex survey design. Be sure to treat variables you think should be categorical appropriately. From these results, provide an answer to the researchers question of interest.
+
+``` stata
+
+. encode nd2, generate(nd2_num)
+
+. encode b7_a, generate(b7_a_num)
+
+. encode gh1, generate(gh1_num)
+
+. encode educ_4cat, generate(educ_4cat_num)
+
+. encode ppethm, generate(ppethm_num)
+
+. svyset caseid [pw=weight_pop]
+
+      pweight: weight_pop
+          VCE: linearized
+  Single unit: missing
+     Strata 1: <one>
+         SU 1: caseid
+        FPC 1: <zero>
+        
+
+. svy: logistic sameorbetter i.nd2_num i.b7_a_num i.gh1_num i.educ_4cat_num i.ppethm_num
+(running logistic on estimation sample)
+
+Survey: Logistic regression
+
+Number of strata   =         1                Number of obs     =       11,667
+Number of PSUs     =    11,667                Population size   =  255,114,223
+                                              Design df         =       11,666
+                                              F(  17,  11650)   =        55.33
+                                              Prob > F          =       0.0000
+
+------------------------------------------------------------------------------------------------------
+                                     |             Linearized
+                        sameorbetter | Odds Ratio   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-------------------------------------+----------------------------------------------------------------
+                             nd2_num |
+                        Much higher  |   1.005597   .0852199     0.07   0.947     .8516883    1.187317
+                         Much lower  |   1.266262   .1916566     1.56   0.119     .9411859    1.703615
+                    Somewhat higher  |   1.069642   .0576705     1.25   0.212     .9623668    1.188876
+                     Somewhat lower  |    1.29174   .2400072     1.38   0.168     .8974373    1.859285
+                                     |
+                            b7_a_num |
+                               Good  |   .4321301   .0847103    -4.28   0.000     .2942636    .6345889
+                          Only fair  |   .1669033   .0323953    -9.22   0.000     .1140862    .2441727
+                               Poor  |   .0742946   .0147228   -13.12   0.000     .0503801    .1095609
+                                     |
+                             gh1_num |
+Own your home free and clear (wi..)  |   .6675017   .0681022    -3.96   0.000     .5465113     .815278
+Own your home with a mortgage or ..  |   .6849157   .0672549    -3.85   0.000     .5649957    .8302885
+                           Pay rent  |   .7751127   .0788138    -2.51   0.012     .6350462    .9460723
+                                     |
+                       educ_4cat_num |
+          High school degree or GED  |   .8674937    .055261    -2.23   0.026     .7656629    .9828678
+     Less than a high school degree  |   .8217839   .0900249    -1.79   0.073       .66298    1.018626
+Some college/technical or associa..  |   .9094292   .0478303    -1.81   0.071     .8203446    1.008188
+                                     |
+                          ppethm_num |
+                Black, Non-Hispanic  |   2.596571   .3840787     6.45   0.000     1.943029    3.469932
+                           Hispanic  |   1.448566   .2069499     2.59   0.010     1.094759    1.916718
+                Other, Non-Hispanic  |   1.708015   .2969877     3.08   0.002     1.214704    2.401668
+                White, Non-Hispanic  |   1.098153   .1428509     0.72   0.472     .8509904    1.417102
+                                     |
+                               _cons |   10.64902   2.594703     9.71   0.000      6.60522    17.16848
+------------------------------------------------------------------------------------------------------
+Note: _cons estimates baseline odds.
+```
+
+As we can see from the results, the p-value of all nd2_num variable levels are not significant at 0.1 level, so we **cannot** say whether the respondent's family is better off, the same, or worse off finanicially compared to 12 month's ago can be predicted by thinking that the chance of experiencing a natural disaster or severe weather event will be higher, lower or about the same in 5 years.
+
+g.  Get the data out of Stata and into R.
+
+``` stata
+save "/Users/jiaqizhu/Downloads/506/506_HW4/hw4_statadata.dta"
+```
+
+h.  Obtain the pseudo- R 2 value for the logistic model fit above and report it.
+
+```{r}
+library(survey)
+library(haven)
+dat <- read_dta("hw4_statadata.dta")
+design <- svydesign(id = ~ caseid, weight = ~ weight_pop, data = dat)
+
+mod <- svyglm(sameorbetter ~ as.factor(nd2_num) + as.factor(b7_a_num) + as.factor(gh1_num) + as.factor(educ_4cat_num) + as.factor(ppethm_num), family = "binomial", design=design)
+
+psrsq(mod)
 
 ```
-```{r}
-month <- month.name[5]
-month
-```
+
+so the pseudo- R\^2 value is 0.1069071.
